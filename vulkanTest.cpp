@@ -5,6 +5,8 @@
 #include <stdexcept>
 #include <functional>
 #include <cstdlib>
+#include <vector>
+#include <string.h>
 const int WIDTH = 200;
 const int HEIGHT = 200;
 
@@ -50,6 +52,20 @@ class HelloTriangleApplication
             glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
             window = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
         }
+        int checkExtensions(const char ** glfwExtensions, int glfwExtensionCount, std :: vector<VkExtensionProperties> & glfwExtensionSupported)
+        {
+            for(int i = 0; i < glfwExtensionCount; i++)
+            {
+                int tmp = 0;
+                for(int j = 0; j < glfwExtensionSupported.size(); j++)
+                {
+                    tmp += (strcmp(glfwExtensionSupported[j].extensionName, glfwExtensions[i]) != 0) ? 0 : 1;
+                }
+                if(tmp == 0)
+                    return 0;
+            }
+            return 1;
+        }
         void createInstance()
         {
             VkApplicationInfo appInfo = {};
@@ -64,10 +80,38 @@ class HelloTriangleApplication
             createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
             createInfo.pApplicationInfo = &appInfo;
 
+            uint32_t extensionCount = 0;
+            vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+
+            std :: vector<VkExtensionProperties> extensions(extensionCount);
+            vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
+
+            std :: cout << "avaliable extensions " << std :: endl;
+
+            for(const auto& extension : extensions)
+            {
+                std :: cout << " \t "<< extension.extensionName << std :: endl;
+            }
+
             uint32_t glfwExtensionCount = 0;
             const char ** glfwExtensions;
 
             glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+            std :: cout << std :: endl;
+            for(int i = 0; i < glfwExtensionCount; i++)
+            {
+                std :: cout << glfwExtensions[i] << std :: endl;
+            }
+            std :: cout << std :: endl;
+            if(checkExtensions(glfwExtensions, glfwExtensionCount, extensions))
+            {
+                std :: cout <<"It is ok" << std :: endl;
+            }
+            else 
+            {
+                std :: cout << "fuck" << std :: endl;
+            }
 
             createInfo.enabledExtensionCount = glfwExtensionCount;
             createInfo.ppEnabledExtensionNames = glfwExtensions;
