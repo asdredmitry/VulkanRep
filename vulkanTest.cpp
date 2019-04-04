@@ -27,6 +27,15 @@ VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMes
         return VK_ERROR_EXTENSION_NOT_PRESENT;
     }
 }
+void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT callback, const VkAllocationCallbacks* pAllocator)
+{
+    auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    //auto func (PFN_vkDestroyDebugUtilsMessnengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+    if(func != nullptr)
+    {
+        func(instance, callback, pAllocator);
+    }
+}
 class HelloTriangleApplication
 {
     private:
@@ -46,9 +55,45 @@ class HelloTriangleApplication
         {
             createInstance();
             setupDebugCallback();
+            pickPhysicalDevice();
 
         }
-        
+        void pickPhysicalDevice()
+        {
+            VkPhysicalDevice physicalDevice = VK_NULL_HANDLE;
+
+            uint32_t deviceCount = 0;
+            vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
+
+            if(deviceCount == 0)
+            {
+                throw std::runtime_error("failed to find gpu with vulkan support");
+            }
+            std::vector<VkPhysicalDevice> devices(deviceCount);
+            vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
+
+            for(const auto& device : devices)
+            {
+                if(isDeviceSuitable(device))
+                {
+                    physicalDevice = device;
+                    break;
+                }
+            }
+            if(physicalDevice == VK_NULL_HANDLE)
+            {
+                throw std::runtime_error("failed to find a suitable gpu!");
+            }
+        }
+        bool isDeviceSuitable(VkPhysicalDevice device)
+        {
+            VkPhysicalDeviceProperties deviceProperties;
+            vkGetPhysicalDeviceProperties(device, &deviceProperties);
+            VkPhysicalDeviceFeatures deviceFeatures;
+            vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+            
+            return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU &&  deviceFeatures.geometryShader;
+        }
         void mainLoop()
         {
             while(!glfwWindowShouldClose(window))
@@ -59,6 +104,9 @@ class HelloTriangleApplication
 
         void cleanup()
         {
+            if(enableValidationLayers)
+                DestroyDebugUtilsMessengerEXT(instance, callback, nullptr);
+
             vkDestroyInstance(instance, nullptr);
             
             glfwDestroyWindow(window);
@@ -104,6 +152,11 @@ class HelloTriangleApplication
             VkInstanceCreateInfo createInfo = {};
             createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
             createInfo.pApplicationInfo = &appInfo;
+
+            auto extensions = getRequiredExtensions();
+            createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+            createInfo.ppEnabledExtensionNames = extensions.data();
+
             if(enableValidationLayers)
             {
                 createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
@@ -113,52 +166,10 @@ class HelloTriangleApplication
             {
                 createInfo.enabledLayerCount = 0;
             }
-            auto extensionsNeed = getRequiredExtensions();
-            createInfo.enabledExtensionCount = static_cast<uint32_t>(extensionsNeed.size());
-            createInfo.ppEnabledExtensionNames = extensionsNeed.data();
 
-            uint32_t extensionCount = 0;
-            vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-
-            std :: vector<VkExtensionProperties> extensions(extensionCount);
-            vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
-
-            std :: cout << "avaliable extensions " << std :: endl;
-
-            for(const auto& extension : extensions)
+            if(vkCreateInstance(&createInfo, nullptr, &instance) != VK_SUCCESS)
             {
-                std :: cout << " \t "<< extension.extensionName << std :: endl;
-            }
-
-            uint32_t glfwExtensionCount = 0;
-            const char ** glfwExtensions;
-
-            glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-            std :: cout << std :: endl;
-            for(int i = 0; i < glfwExtensionCount; i++)
-            {
-                std :: cout << glfwExtensions[i] << std :: endl;
-            }
-            std :: cout << std :: endl;
-            if(checkExtensions(glfwExtensions, glfwExtensionCount, extensions))
-            {
-                std :: cout <<"It is ok" << std :: endl;
-            }
-            else 
-            {
-                std :: cout << "fuck" << std :: endl;
-            }
-
-            createInfo.enabledExtensionCount = glfwExtensionCount;
-            createInfo.ppEnabledExtensionNames = glfwExtensions;
-            createInfo.enabledLayerCount = 0;
-            
-            VkResult result = vkCreateInstance(&createInfo, nullptr, &instance);
-
-            if(result != VK_SUCCESS)
-            {
-                throw std :: runtime_error("failed to create instance!");
+                throw std::runtime_error("failed to create instance!");
             }
         }
         bool checkValidationLayerSupport()
@@ -191,6 +202,7 @@ class HelloTriangleApplication
             }
             return true;
         }
+        
         std::vector<const char*> getRequiredExtensions()
         {
             uint32_t glfwExtensionCount = 0;
@@ -204,15 +216,11 @@ class HelloTriangleApplication
             
             return extensions;
         }
-        static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
-            VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, 
-            VkDebugUtilsMessageTypeFlagsEXT messageType,
-            const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-            void* pUserData)
-            {
-                std::cerr << " vallidation layer :" << pCallbackData->pMessage << std :: endl;
-                return VK_FALSE;
-            }
+         static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData) {
+        std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
+
+        return VK_FALSE;
+    }
         void setupDebugCallback()
         {
             if(!enableValidationLayers)
