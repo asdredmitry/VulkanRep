@@ -7,8 +7,8 @@
 #include <cstdlib>
 #include <vector>
 #include <string.h>
-const int WIDTH = 200;
-const int HEIGHT = 200;
+const int WIDTH = 600;
+const int HEIGHT = 800;
 
 const std::vector<const char*> validationLayers = {
 "VK_LAYER_LUNARG_standard_validation"
@@ -19,11 +19,29 @@ const std::vector<const char*> validationLayers = {
 #else   
     const bool enableValidationLayers = true;
 #endif
+VkResult CreateDebugUtilsMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT * pCallback)
+    {
+        auto func = (PFN_vkCreateDebugUtilsMessengerEXT)
+            vkGetInstanceProcAddr(instance,
+            "vkCreateDebugUtilsMessengerEXT");
+        //auto func = (PFN_vkCreateDebugUtilsMessengerExt)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+        if(func != nullptr)
+        {
+            std::cout << "I am here1 " << std::endl;
+            return func(instance, pCreateInfo, pAllocator, pCallback);
+        }
+        else 
+        {
+            std::cout << "I am here2" << std::endl;
+            return VK_ERROR_EXTENSION_NOT_PRESENT;
+        }
+    }
 class HelloTriangleApplication
 {
     private:
         GLFWwindow * window;
         VkInstance instance;
+        VkDebugUtilsMessengerEXT callback;
     public:
         void run()
         {
@@ -36,6 +54,7 @@ class HelloTriangleApplication
         void initVulkan()
         {
             createInstance();
+            setupDebugCallback();
 
         }
         
@@ -203,6 +222,27 @@ class HelloTriangleApplication
                 std::cerr << " vallidation layer :" << pCallbackData->pMessage << std :: endl;
                 return VK_FALSE;
             }
+        void setupDebugCallback()
+        {
+            if(!enableValidationLayers)
+                return ;
+            VkDebugUtilsMessengerCreateInfoEXT createInfo = {};
+            createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+            createInfo.messageSeverity = 
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT |
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT|
+                VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+            createInfo.messageType = 
+                VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT|
+                VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | 
+                VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+            createInfo.pfnUserCallback = debugCallback;
+            createInfo.pUserData = nullptr;
+            if(CreateDebugUtilsMessengerEXT(instance, &createInfo, nullptr, &callback) != VK_SUCCESS)
+            {
+                throw std::runtime_error("failed to set up debug callback!");
+            }
+        }
 };
 int main()
 {
