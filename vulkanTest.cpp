@@ -10,6 +10,15 @@
 const int WIDTH = 200;
 const int HEIGHT = 200;
 
+const std::vector<const char*> validationLayers = {
+"VK_LAYER_LUNARG_standard_validation"
+};
+
+#ifdef NDEBUG
+    const bool enabelValidationLayers = false;
+#else   
+    const bool enableValidationLayers = true;
+#endif
 class HelloTriangleApplication
 {
     private:
@@ -40,6 +49,8 @@ class HelloTriangleApplication
 
         void cleanup()
         {
+            vkDestroyInstance(instance, nullptr);
+            
             glfwDestroyWindow(window);
 
             glfwTerminate();
@@ -68,6 +79,10 @@ class HelloTriangleApplication
         }
         void createInstance()
         {
+            if(enableValidationLayers && !checkValidationLayerSupport())
+            {
+                throw std::runtime_error("validation layers requested but not available!");
+            }
             VkApplicationInfo appInfo = {};
             appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
             appInfo.pApplicationName = "Hello Triangle";
@@ -79,6 +94,18 @@ class HelloTriangleApplication
             VkInstanceCreateInfo createInfo = {};
             createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
             createInfo.pApplicationInfo = &appInfo;
+            if(enableValidationLayers)
+            {
+                createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+                createInfo.ppEnabledLayerNames = validationLayers.data();
+            }
+            else
+            {
+                createInfo.enabledLayerCount = 0;
+            }
+            auto extensionsNeed = getRequiredExtensions();
+            createInfo.enabledExtensionCount = static_cast<uint32_t>(extensionsNeed.size());
+            createInfo.ppEnabledExtensionNames = extensionsNeed.data();
 
             uint32_t extensionCount = 0;
             vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
@@ -124,6 +151,58 @@ class HelloTriangleApplication
                 throw std :: runtime_error("failed to create instance!");
             }
         }
+        bool checkValidationLayerSupport()
+        {   
+            uint32_t layerCount;
+            vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+
+            std::vector<VkLayerProperties> availableLayers(layerCount);
+            vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+
+            std :: cout << "layer Names : " << std :: endl;
+            for(const auto& layerProperties : availableLayers)
+            {
+                std :: cout << layerProperties.layerName << std :: endl;
+            }
+            for(const char* layerName : validationLayers)
+            {
+                bool layerFound = false;
+            
+                for(const auto& layerProperties :availableLayers)
+                {
+                    if(strcmp(layerName, layerProperties.layerName) == 0)
+                    {
+                        layerFound = true;
+                        break;
+                    }
+                }
+                if(!layerFound)
+                    return false;
+            }
+            return true;
+        }
+        std::vector<const char*> getRequiredExtensions()
+        {
+            uint32_t glfwExtensionCount = 0;
+            const char ** glfwExtensions;
+            glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+            std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+
+            if(enableValidationLayers)
+                extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+            
+            return extensions;
+        }
+        static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+            VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, 
+            VkDebugUtilsMessageTypeFlagsEXT messageType,
+            const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+            void* pUserData)
+            {
+                std::cerr << " vallidation layer :" << pCallbackData->pMessage << std :: endl;
+                return VK_FALSE;
+            }
 };
 int main()
 {
