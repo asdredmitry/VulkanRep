@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <vector>
 #include <string.h>
+#include <map>
 const int WIDTH = 600;
 const int HEIGHT = 800;
 
@@ -14,6 +15,15 @@ const std::vector<const char*> validationLayers = {
 "VK_LAYER_LUNARG_standard_validation"
 };
 
+struct QueueFamilyIndices
+{
+    int graphicsFamily = -1;
+    
+    bool isComplete()
+    {
+        return graphicsFamily >= 0;
+    }
+};
 #ifdef NDEBUG
     const bool enabelValidationLayers = false;
 #else   
@@ -42,6 +52,8 @@ class HelloTriangleApplication
         GLFWwindow * window;
         VkInstance instance;
         VkDebugUtilsMessengerEXT callback;
+        VkDevice device;
+        VkQueue graphicsQueue;
     public:
         void run()
         {
@@ -56,7 +68,7 @@ class HelloTriangleApplication
             createInstance();
             setupDebugCallback();
             pickPhysicalDevice();
-
+            createLogicalDevice();
         }
         void pickPhysicalDevice()
         {
@@ -71,28 +83,119 @@ class HelloTriangleApplication
             }
             std::vector<VkPhysicalDevice> devices(deviceCount);
             vkEnumeratePhysicalDevices(instance, &deviceCount, devices.data());
-
+            std::multimap<int, VkPhysicalDevice> candidates;
             for(const auto& device : devices)
             {
                 if(isDeviceSuitable(device))
                 {
                     physicalDevice = device;
-                    break;
+                    int score = rateDeviceSuitability(device);
+                    candidates.insert(std::make_pair(score, device));
                 }
             }
-            if(physicalDevice == VK_NULL_HANDLE)
+            
+            if(candidates.rbegin()->first > 0)
+                physicalDevice = candidates.rbegin()->second;
+            else
             {
-                throw std::runtime_error("failed to find a suitable gpu!");
+                throw std::runtime_error("failed to find a suitable gpu");
             }
+            QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+
+            std::cout << indices.graphicsFamily << " Graphics family" << std::endl;
+            VkDeviceQueueCreateInfo queueCreateInfo = {};
+            queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+            queueCreateInfo.queueFamilyIndex = indices.graphicsFamily;
+            queueCreateInfo.queueCount = 1;
+            float queuePriority = 1.0f;
+            queueCreateInfo.pQueuePriorities = &queuePriority;
+            VkPhysicalDeviceFeatures deviceFeatures = {};
+            VkDeviceCreateInfo createInfo = {};
+            createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+
+            createInfo.pQueueCreateInfos = &queueCreateInfo;
+            createInfo.queueCreateInfoCount = 1;
+            createInfo.pEnabledFeatures = &deviceFeatures;
+
+            createInfo.enabledExtensionCount = 0;
+            if(enableValidationLayers)
+            {
+                createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+                createInfo.ppEnabledLayerNames = validationLayers.data();
+            }
+            else 
+            {
+                createInfo.enabledLayerCount = 0;
+            }
+            if(vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS)
+                throw std::runtime_error("failed to create logical device");
+            /*std::multimap<int, VkPhysicalDevice> candidates;
+            for(const auto& device: devices)
+            {
+                int score = rateDeviceSuitability(device);
+                candidates.insert(std::make_pair(score, device));
+            }
+            if(candidates.rbegin()->first > 0)
+            {
+                physicalDevice = candidates.rbegin()->second;
+            }
+            else 
+            {
+                throw std::runtime_error("failed to find a suitable GPU");
+            }
+            */
+           /*if(physicalDevice == VK_NULL_HANDLE)
+                throw std::runtime_error("failed to find suitable GPU!");
+                */
+
         }
         bool isDeviceSuitable(VkPhysicalDevice device)
+        {
+            QueueFamilyIndices indices = findQueueFamilies(device);
+
+            return indices.isComplete();
+        }
+        int rateDeviceSuitability(VkPhysicalDevice device)
         {
             VkPhysicalDeviceProperties deviceProperties;
             vkGetPhysicalDeviceProperties(device, &deviceProperties);
             VkPhysicalDeviceFeatures deviceFeatures;
             vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+            int score = 0;
+            if(deviceProperties.deviceType  == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+                score += 1000;
+            std::cout << deviceProperties.limits.maxImageDimension2D << std::endl;
+            score += deviceProperties.limits.maxImageDimension2D;
             
-            return deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU &&  deviceFeatures.geometryShader;
+            if(!deviceFeatures.geometryShader)
+                return 0;
+            return score;
+
+        }
+        QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device)
+        {
+            QueueFamilyIndices indices;
+            uint32_t queueFamilyCount = 0;
+            vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+            std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+            vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+            int i = 0;
+            for(const auto& queueFamily: queueFamilies)
+            {
+                if(queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+                {
+                    indices.graphicsFamily = i;
+                }
+                if(indices.isComplete())
+                    break;
+                i++;
+            }
+
+            return indices;
+        }
+        void createLogicalDevice()
+        {
+            //QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
         }
         void mainLoop()
         {
@@ -107,6 +210,7 @@ class HelloTriangleApplication
             if(enableValidationLayers)
                 DestroyDebugUtilsMessengerEXT(instance, callback, nullptr);
 
+            vkDestroyDevice(device, nullptr);
             vkDestroyInstance(instance, nullptr);
             
             glfwDestroyWindow(window);
