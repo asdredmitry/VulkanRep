@@ -129,6 +129,7 @@ class HelloTriangleApplication
             }
             if(vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) != VK_SUCCESS)
                 throw std::runtime_error("failed to create logical device");
+            
             /*std::multimap<int, VkPhysicalDevice> candidates;
             for(const auto& device: devices)
             {
@@ -169,6 +170,7 @@ class HelloTriangleApplication
             
             if(!deviceFeatures.geometryShader)
                 return 0;
+            std::cout << score << std::endl;
             return score;
 
         }
@@ -182,6 +184,7 @@ class HelloTriangleApplication
             int i = 0;
             for(const auto& queueFamily: queueFamilies)
             {
+                std::cout << queueFamily.queueCount << std::endl;
                 if(queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
                 {
                     indices.graphicsFamily = i;
